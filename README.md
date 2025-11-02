@@ -53,6 +53,9 @@ mqtt:
   client_id: "webhook-bridge"
   keepalive: 60
 
+# API version prefix for all routes (default: "v1")
+api_version: "v1"
+
 routes:
   - path: "/set_temperature"
     method: "POST"
@@ -105,10 +108,12 @@ payload_template: |
 
 ## Examples
 
+All routes are prefixed with the API version (default: `/v1/`).
+
 ### Basic Temperature Control
 
 ```bash
-curl -X POST "http://localhost:8000/set_temperature?room=bedroom&target=21.5"
+curl -X POST "http://localhost:8000/v1/set_temperature?room=bedroom&target=21.5"
 ```
 
 Publishes to `command/set_temperature/bedroom`:
@@ -135,7 +140,7 @@ Config:
 
 Usage:
 ```bash
-curl -X POST "http://localhost:8000/device/sensor_01/control" \
+curl -X POST "http://localhost:8000/v1/device/sensor_01/control" \
   -H "Content-Type: application/json" \
   -d '{"state": "on"}'
 ```

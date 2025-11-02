@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from contextlib import asynccontextmanager
 from typing import Optional
 import uvicorn
@@ -10,6 +10,7 @@ from app.config import Config
 from app.mqtt_client import MQTTManager
 from app.route_builder import RouteBuilder
 from app.models import HealthResponse
+from app.auth import verify_api_key, get_api_key
 
 # Configure logging
 logging.basicConfig(
@@ -58,8 +59,14 @@ async def lifespan(app: FastAPI):
     # Build routes dynamically
     route_builder = RouteBuilder(mqtt_manager)
     route_builder.build_routes(config.routes)
-    app.include_router(route_builder.router)
-    logger.info(f"Routes built and registered: {len(config.routes)} endpoints")
+    app.include_router(route_builder.router, prefix=f"/{config.api_version}")
+    logger.info(f"Routes built and registered: {len(config.routes)} endpoints with API version: {config.api_version}")
+
+    # Log authentication status
+    if get_api_key():
+        logger.info("API authentication is ENABLED")
+    else:
+        logger.warning("API authentication is DISABLED - set API_KEY environment variable for security")
 
     yield
 
@@ -89,9 +96,11 @@ async def health_check():
 @app.get("/")
 async def root():
     """Root endpoint with basic information"""
+    api_prefix = f"/{config.api_version}" if config else "/v1"
     return {
         "service": "MQTT-Webhook Bridge",
         "version": "1.0.0",
+        "api_version": config.api_version if config else "v1",
         "docs": "/docs",
         "health": "/health"
     }

@@ -36,6 +36,7 @@ class MQTTConfig(BaseModel):
 class Config(BaseModel):
     mqtt: MQTTConfig
     routes: List[RouteConfig]
+    api_version: str = "v1"  # Default API version
 
     @classmethod
     def load_from_yaml(cls, path: str) -> "Config":

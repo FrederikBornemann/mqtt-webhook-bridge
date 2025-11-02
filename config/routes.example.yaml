@@ -1,0 +1,115 @@
+mqtt:
+  broker: "192.168.1.100"  # Your MQTT broker IP (e.g., Mosquitto on same Raspberry Pi)
+  port: 1883
+  username: null              # Set if your MQTT broker requires auth
+  password: null
+  client_id: "webhook-bridge"
+  keepalive: 60
+
+# API version prefix for all routes (default: "v1")
+api_version: "v1"
+
+routes:
+  # Example 1: Set temperature with query parameters
+  - path: "/temperature/set"
+    method: "POST"
+    mqtt_topic: "home/climate/{room}/set"
+    parameters:
+      - name: "room"
+        type: "string"
+        required: true
+        location: "query"
+        enum: ["living_room", "bedroom", "kitchen", "bathroom"]
+      - name: "temperature"
+        type: "float"
+        required: true
+        location: "query"
+        min: 15.0
+        max: 30.0
+    payload_template: |
+      {
+        "room": "{{room}}",
+        "target_temperature": {{temperature}},
+        "timestamp": "{{now()}}"
+      }
+    qos: 1
+    retain: false
+
+  # Example 2: Control device with path parameter
+  - path: "/device/{device_id}/control"
+    method: "POST"
+    mqtt_topic: "home/devices/{device_id}/command"
+    parameters:
+      - name: "device_id"
+        type: "string"
+        required: true
+        location: "path"
+      - name: "action"
+        type: "string"
+        required: true
+        location: "body"
+        enum: ["on", "off", "toggle"]
+      - name: "brightness"
+        type: "integer"
+        required: false
+        location: "body"
+        default: 100
+        min: 0
+        max: 100
+    payload_template: |
+      {
+        "device": "{{device_id}}",
+        "action": "{{action}}",
+        {% if brightness is defined %}
+        "brightness": {{brightness}},
+        {% endif %}
+        "source": "webhook"
+      }
+    qos: 1
+    retain: true
+
+  # Example 3: Trigger automation
+  - path: "/automation/trigger"
+    method: "POST"
+    mqtt_topic: "home/automation/trigger"
+    parameters:
+      - name: "scene"
+        type: "string"
+        required: true
+        location: "query"
+        enum: ["morning", "evening", "night", "away"]
+    payload_template: |
+      {
+        "scene": "{{scene}}",
+        "triggered_at": "{{now()}}"
+      }
+    qos: 1
+    retain: false
+
+  # Example 4: Sensor data update
+  - path: "/sensor/{sensor_id}/update"
+    method: "POST"
+    mqtt_topic: "home/sensors/{sensor_id}/state"
+    parameters:
+      - name: "sensor_id"
+        type: "string"
+        required: true
+        location: "path"
+      - name: "value"
+        type: "float"
+        required: true
+        location: "body"
+      - name: "unit"
+        type: "string"
+        required: false
+        location: "body"
+        default: "unknown"
+    payload_template: |
+      {
+        "sensor": "{{sensor_id}}",
+        "value": {{value}},
+        "unit": "{{unit}}",
+        "timestamp": "{{now()}}"
+      }
+    qos: 0
+    retain: true

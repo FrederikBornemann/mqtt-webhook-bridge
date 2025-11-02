@@ -212,3 +212,9 @@ mosquitto/log/
 secrets/
 *.pem
 *.key
+
+# Configuration files with sensitive data
+config/routes.yaml
+.env
+.env.local
+*.log

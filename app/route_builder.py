@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Query, Path, Body, HTTPException, Request
+from fastapi import APIRouter, Query, Path, Body, HTTPException, Request, Depends
 from jinja2 import Template
 from typing import List, Any, Dict, Optional
 import json
@@ -6,6 +6,7 @@ import inspect
 import logging
 from app.mqtt_client import MQTTManager
 from app.config import RouteConfig, ParameterConfig
+from app.auth import verify_api_key
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +32,7 @@ class RouteBuilder:
         body_params = [p for p in config.parameters if p.location == "body"]
 
         # Build the endpoint function dynamically
-        async def endpoint(request: Request, **kwargs):
+        async def endpoint(request: Request, api_key: str = Depends(verify_api_key), **kwargs):
             try:
                 logger.debug(f"Handling request: {config.method} {config.path} with params: {kwargs}")
 
@@ -124,7 +125,7 @@ class RouteBuilder:
 
         # Update function signature
         sig = inspect.signature(endpoint)
-        new_params = [sig.parameters['request']]
+        new_params = [sig.parameters['request'], sig.parameters['api_key']]
 
         for param_name, param_default in parameters.items():
             new_params.append(
