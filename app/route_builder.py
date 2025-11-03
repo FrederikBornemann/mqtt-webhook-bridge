@@ -4,6 +4,7 @@ from typing import List, Any, Dict, Optional
 import json
 import inspect
 import logging
+from datetime import datetime
 from app.mqtt_client import MQTTManager
 from app.config import RouteConfig, ParameterConfig
 from app.auth import verify_api_key
@@ -69,12 +70,49 @@ class RouteBuilder:
                     if param.name not in all_params and not param.required and param.default is not None:
                         all_params[param.name] = param.default
 
+                # Validate parameters
+                for param in config.parameters:
+                    if param.name in all_params:
+                        value = all_params[param.name]
+
+                        # Enum validation
+                        if param.enum is not None and value not in param.enum:
+                            logger.warning(f"Invalid enum value for {param.name}: {value}, allowed: {param.enum}")
+                            raise HTTPException(
+                                status_code=422,
+                                detail=f"Invalid value for {param.name}. Allowed values: {', '.join(param.enum)}"
+                            )
+
+                        # Min/Max validation for numeric types
+                        if param.type in ["integer", "float"]:
+                            if param.min is not None and value < param.min:
+                                logger.warning(f"Value {value} for {param.name} is below minimum {param.min}")
+                                raise HTTPException(
+                                    status_code=422,
+                                    detail=f"Value for {param.name} must be at least {param.min}"
+                                )
+                            if param.max is not None and value > param.max:
+                                logger.warning(f"Value {value} for {param.name} is above maximum {param.max}")
+                                raise HTTPException(
+                                    status_code=422,
+                                    detail=f"Value for {param.name} must be at most {param.max}"
+                                )
+
                 # Render MQTT topic with variables
                 topic = config.mqtt_topic.format(**all_params)
 
                 # Render payload template with Jinja2
                 template = Template(config.payload_template)
-                payload = template.render(**all_params)
+                # Add template context with custom functions and filters
+                template_context = {
+                    **all_params,
+                    'now': lambda: datetime.now().isoformat(),
+                }
+                # Render template
+                payload = template.render(**template_context)
+
+                # Fix Python boolean representation (True/False -> true/false) for JSON compatibility
+                payload = payload.replace(': True', ': true').replace(': False', ': false')
 
                 # Validate JSON
                 payload_json = json.loads(payload)
@@ -89,11 +127,14 @@ class RouteBuilder:
 
                 logger.info(f"Request handled successfully: {config.method} {config.path} -> {topic}")
                 return {
-                    "status": "success",
-                    "mqtt_topic": topic,
+                    "status": "published",
+                    "topic": topic,
                     "payload": payload_json
                 }
 
+            except HTTPException:
+                # Re-raise HTTPExceptions (like validation errors) without modification
+                raise
             except KeyError as e:
                 logger.warning(f"Missing required parameter: {e}")
                 raise HTTPException(status_code=400, detail=f"Missing required parameter: {e}")

@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2.0
+    container_name: mqtt-broker-test
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./tests/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    networks:
+      - test-network
+    healthcheck:
+      test: ["CMD", "mosquitto_sub", "-t", "$$SYS/#", "-C", "1", "-i", "healthcheck", "-W", "3"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  webhook-bridge:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: webhook-bridge-test
+    ports:
+      - "8000:8000"
+    environment:
+      - CONFIG_PATH=/app/config/routes.test.yaml
+      - API_KEY=test-api-key-12345
+    volumes:
+      - ./config/routes.test.yaml:/app/config/routes.test.yaml:ro
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+    networks:
+      - test-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+networks:
+  test-network:
+    driver: bridge
